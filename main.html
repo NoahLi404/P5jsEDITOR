@@ -329,6 +329,30 @@
     font-weight: 600;
     text-shadow: 0 0 10px #00ffff44;
   }
+
+  /* Editor info section */
+  .editor-info {
+    margin-top: 20px;
+    padding: 15px;
+    border-top: 2px solid #00ffff33;
+    text-align: center;
+  }
+
+  .editor-description {
+    font-size: 14px;
+    font-weight: 600;
+    color: #00ffffdd;
+    margin-bottom: 8px;
+    text-shadow: 0 0 10px #00ffff44;
+  }
+
+  .copyright {
+    font-size: 11px;
+    color: #888;
+    margin: 0;
+    font-style: italic;
+    opacity: 0.8;
+  }
 </style>
 </head>
 <body>
@@ -393,6 +417,11 @@
     
     <h3>Generated p5.js Code</h3>
     <pre id="codeBox"></pre>
+    
+    <div class="editor-info">
+      <p class="editor-description">This is a WYSIWYG p5.js Editor</p>
+      <p class="copyright">&copy; Noah Li 2025. All rights reserved.</p>
+    </div>
   </div>
 
   <div class="status-indicator" id="statusIndicator">Ready</div>
