@@ -49,10 +49,21 @@
     font-size: 15px;
     outline: none;
     background: linear-gradient(135deg, #444466 0%, #333355 100%);
-    color: #00ffff;
+    color: #ffffff;
     box-shadow: 0 4px 15px #00ffff22, inset 0 1px 0 #ffffff11;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-weight: 500;
+  }
+  
+  select {
+    color: #ffffff;
+    background: linear-gradient(135deg, #555577 0%, #444466 100%);
+  }
+  
+  select option {
+    background: #444466;
+    color: #ffffff;
+    padding: 8px;
   }
   
   select:hover, input[type=color]:hover, input[type=number]:hover, input[type=range]:hover, button:hover {
@@ -181,15 +192,16 @@
   .handle-bottom-left { bottom: -12px; left: -12px; cursor: nesw-resize; }
   .handle-bottom-right { bottom: -12px; right: -12px; cursor: nwse-resize; }
 
-  /* Rotation Handle */
+  /* Rotation Handle - Made as a square */
   .rotation-handle {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     top: -40px;
     left: 50%;
     transform: translateX(-50%);
     cursor: grab;
     background: linear-gradient(135deg, #ff6b6b 0%, #ff5252 100%);
+    border-radius: 4px;
   }
   
   .rotation-handle:hover {
@@ -324,7 +336,6 @@
     <select id="tool">
       <option value="rect">Rectangle</option>
       <option value="ellipse">Ellipse</option>
-      <option value="line">Line</option>
       <option value="triangle">Triangle</option>
       <option value="select">Select</option>
     </select>
@@ -420,9 +431,18 @@
   let dragOffsetY = 0;
   let rotating = false;
   let rotationStartX = 0;
+  let rotationStartY = 0;
   let rotationStartAngle = 0;
+  let resizing = false;
+  let resizeHandle = null;
+  let resizeStartX = 0;
+  let resizeStartY = 0;
+  let resizeStartW = 0;
+  let resizeStartH = 0;
   let snapToGrid = false;
   let gridSize = 20;
+  let isDrawing = false;
+  let previewShape = null;
 
   // UI elements
   const selectionBox = document.getElementById('selectionBox');
@@ -500,8 +520,14 @@
     rotationHandle.addEventListener('mousedown', startRotation);
     
     // Size handles
-    selectionBox.querySelector('.size-increase').addEventListener('click', () => changeSize(10));
-    selectionBox.querySelector('.size-decrease').addEventListener('click', () => changeSize(-10));
+    selectionBox.querySelector('.size-increase').addEventListener('mousedown', e => {
+      e.stopPropagation();
+      changeSize(10);
+    });
+    selectionBox.querySelector('.size-decrease').addEventListener('mousedown', e => {
+      e.stopPropagation();
+      changeSize(-10);
+    });
     
     // Move handle
     const moveHandle = selectionBox.querySelector('.move-handle');
@@ -528,6 +554,13 @@
   function mousePressed() {
     if (mouseX < 0 || mouseY < 0 || mouseX > width || mouseY > height) return;
 
+    // Check if clicking on handles first
+    if (currentTool === 'select' && selectedShapeIndices.length > 0) {
+      if (checkHandleClick(mouseX, mouseY)) {
+        return; // Handle was clicked, don't proceed with selection
+      }
+    }
+
     if (currentTool === 'select') {
       handleSelection();
     } else {
@@ -535,8 +568,26 @@
     }
   }
 
+  function checkHandleClick(px, py) {
+    // Convert canvas coordinates to screen coordinates
+    const canvasRect = document.querySelector('canvas').getBoundingClientRect();
+    const screenX = canvasRect.left + px;
+    const screenY = canvasRect.top + py;
+    
+    // Check all handles
+    const handles = selectionBox.querySelectorAll('.control-handle');
+    for (let handle of handles) {
+      const rect = handle.getBoundingClientRect();
+      if (screenX >= rect.left && screenX <= rect.right && 
+          screenY >= rect.top && screenY <= rect.bottom) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function handleSelection() {
-    // Check for overlapping shapes and group them
+    // Check for touching/overlapping shapes and group them
     let clickedShapes = [];
     for (let i = shapes.length - 1; i >= 0; i--) {
       if (isPointInShape(mouseX, mouseY, shapes[i])) {
@@ -545,8 +596,8 @@
     }
 
     if (clickedShapes.length > 0) {
-      // If clicking on overlapping shapes, select all overlapping ones
-      selectedShapeIndices = getOverlappingGroup(clickedShapes[0]);
+      // Get all touching shapes starting from the clicked shape
+      selectedShapeIndices = getTouchingGroup(clickedShapes[0]);
       setupDragging();
       updateTransformUI();
       updateSelectionBox();
@@ -561,25 +612,33 @@
     }
   }
 
-  function getOverlappingGroup(shapeIndex) {
+  function getTouchingGroup(shapeIndex) {
     let group = [shapeIndex];
-    let targetShape = shapes[shapeIndex];
+    let toCheck = [shapeIndex];
+    let checked = new Set([shapeIndex]);
     
-    // Find all shapes that overlap with the target shape
-    for (let i = 0; i < shapes.length; i++) {
-      if (i !== shapeIndex && shapesOverlap(targetShape, shapes[i])) {
-        group.push(i);
+    // Find all shapes that touch any shape in the group
+    while (toCheck.length > 0) {
+      let currentIndex = toCheck.pop();
+      let currentShape = shapes[currentIndex];
+      
+      for (let i = 0; i < shapes.length; i++) {
+        if (!checked.has(i) && shapesTouch(currentShape, shapes[i])) {
+          group.push(i);
+          toCheck.push(i);
+          checked.add(i);
+        }
       }
     }
     
     return group;
   }
 
-  function shapesOverlap(shape1, shape2) {
-    // Simple bounding box overlap check
+  function shapesTouch(shape1, shape2) {
     let s1 = getBounds(shape1);
     let s2 = getBounds(shape2);
     
+    // Check if shapes overlap or touch (including edges)
     return !(s1.right < s2.left || s2.right < s1.left || 
              s1.bottom < s2.top || s2.bottom < s1.top);
   }
@@ -606,6 +665,7 @@
   function startDrawing() {
     startX = snapToGrid ? Math.round(mouseX / gridSize) * gridSize : mouseX;
     startY = snapToGrid ? Math.round(mouseY / gridSize) * gridSize : mouseY;
+    isDrawing = true;
     draggingShape = false;
   }
 
@@ -615,6 +675,7 @@
     
     rotating = true;
     rotationStartX = e.clientX;
+    rotationStartY = e.clientY;
     rotationStartAngle = shapes[selectedShapeIndices[0]].rotation || 0;
     updateStatus('Rotating shape(s)');
   }
@@ -625,31 +686,93 @@
     
     draggingShape = true;
     let firstShape = shapes[selectedShapeIndices[0]];
-    dragOffsetX = mouseX - firstShape.x;
-    dragOffsetY = mouseY - firstShape.y;
+    // Convert client coordinates to canvas coordinates
+    const canvasRect = document.querySelector('canvas').getBoundingClientRect();
+    const canvasX = e.clientX - canvasRect.left;
+    const canvasY = e.clientY - canvasRect.top;
+    dragOffsetX = canvasX - firstShape.x;
+    dragOffsetY = canvasY - firstShape.y;
     updateStatus('Moving shape(s)');
   }
 
   function startResize(e, handle) {
     e.stopPropagation();
-    // Resize logic will be handled in mouseDragged
+    if (selectedShapeIndices.length === 0) return;
+    
+    resizing = true;
+    resizeHandle = handle.classList.contains('handle-top-left') ? 'tl' :
+                  handle.classList.contains('handle-top-right') ? 'tr' :
+                  handle.classList.contains('handle-bottom-left') ? 'bl' : 'br';
+    
+    resizeStartX = e.clientX;
+    resizeStartY = e.clientY;
+    
+    let bounds = getSelectionBounds();
+    resizeStartW = bounds.width;
+    resizeStartH = bounds.height;
+    
     updateStatus('Resizing shape(s)');
   }
 
   function mouseDragged() {
     if (rotating && selectedShapeIndices.length > 0) {
       handleRotation();
+    } else if (resizing && selectedShapeIndices.length > 0) {
+      handleResize();
     } else if (draggingShape && selectedShapeIndices.length > 0 && currentTool === 'select') {
       handleDragging();
+    } else if (isDrawing && currentTool !== 'select') {
+      updatePreview();
     }
   }
 
   function handleRotation() {
-    let dx = mouseX - rotationStartX;
-    let newRotation = rotationStartAngle + radians(dx * 2); // Sensitivity adjustment
+    // Calculate angle based on mouse movement around the center of selection
+    let bounds = getSelectionBounds();
+    let centerX = bounds.left + bounds.width / 2;
+    let centerY = bounds.top + bounds.height / 2;
+    
+    // Convert to canvas coordinates
+    const canvasRect = document.querySelector('canvas').getBoundingClientRect();
+    let currentX = mouseX;
+    let currentY = mouseY;
+    
+    let angle = atan2(currentY - centerY, currentX - centerX);
+    let startAngle = atan2(rotationStartY - canvasRect.top - centerY, rotationStartX - canvasRect.left - centerX);
+    let deltaAngle = angle - startAngle;
     
     selectedShapeIndices.forEach(index => {
-      shapes[index].rotation = newRotation;
+      shapes[index].rotation = rotationStartAngle + deltaAngle;
+    });
+    
+    updateSelectionBox();
+    updateCodeBox();
+  }
+
+  function handleResize() {
+    let dx = mouseX - (resizeStartX - document.querySelector('canvas').getBoundingClientRect().left);
+    let dy = mouseY - (resizeStartY - document.querySelector('canvas').getBoundingClientRect().top);
+    
+    let scaleFactor = 1;
+    if (resizeHandle === 'br') {
+      scaleFactor = Math.max(0.1, 1 + (dx + dy) / 200);
+    } else if (resizeHandle === 'tl') {
+      scaleFactor = Math.max(0.1, 1 - (dx + dy) / 200);
+    } else if (resizeHandle === 'tr') {
+      scaleFactor = Math.max(0.1, 1 + (dx - dy) / 200);
+    } else if (resizeHandle === 'bl') {
+      scaleFactor = Math.max(0.1, 1 + (-dx + dy) / 200);
+    }
+    
+    selectedShapeIndices.forEach(index => {
+      let s = shapes[index];
+      let newW = Math.abs(s.w) * scaleFactor;
+      let newH = Math.abs(s.h) * scaleFactor;
+      
+      if (newW >= 10 && newH >= 10) {
+        s.w = s.w < 0 ? -newW : newW;
+        s.h = s.h < 0 ? -newH : newH;
+      }
     });
     
     updateSelectionBox();
@@ -678,102 +801,77 @@
     updateCodeBox();
   }
 
+  function updatePreview() {
+    if (!isDrawing) return;
+    
+    let endX = snapToGrid ? Math.round(mouseX / gridSize) * gridSize : mouseX;
+    let endY = snapToGrid ? Math.round(mouseY / gridSize) * gridSize : mouseY;
+    
+    previewShape = {
+      tool: currentTool,
+      x: Math.min(startX, endX),
+      y: Math.min(startY, endY),
+      w: Math.abs(endX - startX),
+      h: Math.abs(endY - startY),
+      fill: fillColor.value,
+      fillOpacity: parseInt(fillOpacity.value),
+      stroke: strokeColor.value,
+      strokeWeight: parseInt(strokeWeightVal.value),
+      rotation: 0,
+      flipH: false,
+      flipV: false
+    };
+  }
+
   function mouseReleased() {
-    if (draggingShape || rotating) {
+    if (draggingShape || rotating || resizing) {
       draggingShape = false;
       rotating = false;
+      resizing = false;
       saveToHistory();
       updateStatus('Transform completed');
-    } else if (currentTool !== 'select') {
+    } else if (isDrawing && currentTool !== 'select') {
       createNewShape();
+      isDrawing = false;
+      previewShape = null;
     }
   }
 
   function createNewShape() {
-    if (mouseX > 0 && mouseY > 0) {
-      let endX = snapToGrid ? Math.round(mouseX / gridSize) * gridSize : mouseX;
-      let endY = snapToGrid ? Math.round(mouseY / gridSize) * gridSize : mouseY;
-      
-      let shape = {
-        tool: currentTool,
-        x: Math.min(startX, endX),
-        y: Math.min(startY, endY),
-        w: Math.abs(endX - startX),
-        h: Math.abs(endY - startY),
-        fill: fillColor.value,
-        fillOpacity: parseInt(fillOpacity.value),
-        stroke: strokeColor.value,
-        strokeWeight: parseInt(strokeWeightVal.value),
-        rotation: 0,
-        flipH: false,
-        flipV: false
-      };
-      
-      shapes.push(shape);
+    if (mouseX > 0 && mouseY > 0 && previewShape && previewShape.w > 5 && previewShape.h > 5) {
+      shapes.push(previewShape);
       saveToHistory();
       updateCodeBox();
       updateStatus(`${currentTool} created`);
     }
   }
 
-  // ... existing code ...
   function isPointInShape(px, py, shape) {
     // Enhanced point-in-shape detection with rotation support
-    let cx = shape.x + shape.w / 2;
-    let cy = shape.y + shape.h / 2;
+    let cx = shape.x + Math.abs(shape.w) / 2;
+    let cy = shape.y + Math.abs(shape.h) / 2;
     let angle = shape.rotation || 0;
     let cosA = cos(-angle);
     let sinA = sin(-angle);
     let dx = px - cx;
     let dy = py - cy;
-    let xRot = dx * cosA - dy * sinA + shape.w / 2;
-    let yRot = dx * sinA + dy * cosA + shape.h / 2;
+    let xRot = dx * cosA - dy * sinA + Math.abs(shape.w) / 2;
+    let yRot = dx * sinA + dy * cosA + Math.abs(shape.h) / 2;
 
     switch (shape.tool) {
       case 'rect':
-        return xRot >= 0 && xRot <= shape.w && yRot >= 0 && yRot <= shape.h;
+        return xRot >= 0 && xRot <= Math.abs(shape.w) && yRot >= 0 && yRot <= Math.abs(shape.h);
       case 'ellipse':
         let rx = Math.abs(shape.w) / 2;
         let ry = Math.abs(shape.h) / 2;
-        let dx2 = (xRot - shape.w/2) / rx;
-        let dy2 = (yRot - shape.h/2) / ry;
+        let dx2 = (xRot - Math.abs(shape.w)/2) / rx;
+        let dy2 = (yRot - Math.abs(shape.h)/2) / ry;
         return (dx2 * dx2 + dy2 * dy2) <= 1;
       case 'triangle':
-        // Simple triangle collision (can be enhanced)
-        return xRot >= 0 && xRot <= shape.w && yRot >= 0 && yRot <= shape.h;
-      case 'line':
-        // Line collision detection
-        let dist = distanceToLine(px, py, shape.x, shape.y, shape.x + shape.w, shape.y + shape.h);
-        return dist < (shape.strokeWeight || 1) + 5;
+        return xRot >= 0 && xRot <= Math.abs(shape.w) && yRot >= 0 && yRot <= Math.abs(shape.h);
       default:
         return false;
     }
-  }
-
-  function distanceToLine(px, py, x1, y1, x2, y2) {
-    let A = px - x1;
-    let B = py - y1;
-    let C = x2 - x1;
-    let D = y2 - y1;
-    let dot = A * C + B * D;
-    let lenSq = C * C + D * D;
-    let param = lenSq !== 0 ? dot / lenSq : -1;
-    
-    let xx, yy;
-    if (param < 0) {
-      xx = x1;
-      yy = y1;
-    } else if (param > 1) {
-      xx = x2;
-      yy = y2;
-    } else {
-      xx = x1 + param * C;
-      yy = y1 + param * D;
-    }
-    
-    let dx = px - xx;
-    let dy = py - yy;
-    return Math.sqrt(dx * dx + dy * dy);
   }
 
   function updateSelectionBox() {
@@ -797,10 +895,8 @@
     selectionBox.style.left = left + 'px';
     selectionBox.style.top = top + 'px';
 
-    // Apply transform for first selected shape's rotation
-    let firstShape = shapes[selectedShapeIndices[0]];
-    let transformStr = `rotate(${degrees(firstShape.rotation || 0)}deg)`;
-    selectionBox.style.transform = transformStr;
+    // Reset transform for proper positioning
+    selectionBox.style.transform = 'none';
     selectionBox.style.transformOrigin = 'center center';
   }
 
@@ -848,8 +944,17 @@
   function flipHorizontal() {
     if (selectedShapeIndices.length === 0) return;
     
+    // Get the bounding box of all selected shapes
+    let bounds = getSelectionBounds();
+    let centerX = bounds.left + bounds.width / 2;
+    
     selectedShapeIndices.forEach(index => {
-      shapes[index].flipH = !shapes[index].flipH;
+      let s = shapes[index];
+      // Flip the shape around the group center
+      let shapeCenter = s.x + Math.abs(s.w) / 2;
+      let distFromCenter = shapeCenter - centerX;
+      s.x = centerX - distFromCenter - Math.abs(s.w);
+      s.flipH = !s.flipH;
     });
     
     updateSelectionBox();
@@ -860,8 +965,17 @@
   function flipVertical() {
     if (selectedShapeIndices.length === 0) return;
     
+    // Get the bounding box of all selected shapes
+    let bounds = getSelectionBounds();
+    let centerY = bounds.top + bounds.height / 2;
+    
     selectedShapeIndices.forEach(index => {
-      shapes[index].flipV = !shapes[index].flipV;
+      let s = shapes[index];
+      // Flip the shape around the group center
+      let shapeCenter = s.y + Math.abs(s.h) / 2;
+      let distFromCenter = shapeCenter - centerY;
+      s.y = centerY - distFromCenter - Math.abs(s.h);
+      s.flipV = !s.flipV;
     });
     
     updateSelectionBox();
@@ -1002,11 +1116,12 @@
       
       // Enhanced color handling with opacity
       let fillAlpha = s.fillOpacity !== undefined ? s.fillOpacity : 255;
-      let fillColorStr = s.fill + (fillAlpha < 255 ? Math.floor(fillAlpha).toString(16).padStart(2, '0') : '');
+      let fillCol = color(s.fill);
+      fillCol.setAlpha(fillAlpha);
       
       code += `  stroke("${s.stroke}");\n`;
       code += `  strokeWeight(${s.strokeWeight});\n`;
-      code += `  fill("${fillColorStr}");\n`;
+      code += `  fill("${s.fill}");\n`;
       
       switch (s.tool) {
         case 'rect':
@@ -1017,9 +1132,6 @@
           break;
         case 'triangle':
           code += `  triangle(-${Math.abs(s.w)/2}, ${Math.abs(s.h)/2}, ${Math.abs(s.w)/2}, ${Math.abs(s.h)/2}, 0, -${Math.abs(s.h)/2});\n`;
-          break;
-        case 'line':
-          code += `  line(-${Math.abs(s.w)/2}, -${Math.abs(s.h)/2}, ${Math.abs(s.w)/2}, ${Math.abs(s.h)/2});\n`;
           break;
       }
       code += `  pop();\n`;
@@ -1061,49 +1173,62 @@
 
     // Draw all shapes with enhanced rendering
     for (let i = 0; i < shapes.length; i++) {
-      const s = shapes[i];
+      drawShape(shapes[i], selectedShapeIndices.includes(i));
+    }
+    
+    // Draw preview shape while drawing
+    if (previewShape && isDrawing) {
       push();
-      translate(s.x + Math.abs(s.w) / 2, s.y + Math.abs(s.h) / 2);
-      if (s.flipH) scale(-1, 1);
-      if (s.flipV) scale(1, -1);
-      rotate(s.rotation || 0);
-      
-      // Enhanced color with opacity support
-      let fillAlpha = s.fillOpacity !== undefined ? s.fillOpacity : 255;
-      let fillCol = color(s.fill);
-      fillCol.setAlpha(fillAlpha);
-      
-      stroke(s.stroke);
-      strokeWeight(s.strokeWeight);
-      fill(fillCol);
-      
-      // Enhanced shape rendering
-      switch (s.tool) {
-        case 'rect':
-          rectMode(CENTER);
-          rect(0, 0, Math.abs(s.w), Math.abs(s.h), 5); // Rounded corners
-          break;
-        case 'ellipse':
-          ellipse(0, 0, Math.abs(s.w), Math.abs(s.h));
-          break;
-        case 'triangle':
-          triangle(-Math.abs(s.w)/2, Math.abs(s.h)/2, Math.abs(s.w)/2, Math.abs(s.h)/2, 0, -Math.abs(s.h)/2);
-          break;
-        case 'line':
-          line(-Math.abs(s.w)/2, -Math.abs(s.h)/2, Math.abs(s.w)/2, Math.abs(s.h)/2);
-          break;
-      }
-      
-      // Highlight selected shapes
-      if (selectedShapeIndices.includes(i)) {
-        noFill();
-        stroke(0, 255, 255);
-        strokeWeight(2);
-        rectMode(CENTER);
-        rect(0, 0, Math.abs(s.w) + 10, Math.abs(s.h) + 10, 8);
-      }
-      
+      stroke(255, 255, 255, 150); // Semi-transparent preview
+      fill(red(previewShape.fill), green(previewShape.fill), blue(previewShape.fill), 100);
+      strokeWeight(previewShape.strokeWeight);
+      drawShapeGeometry(previewShape);
       pop();
+    }
+  }
+
+  function drawShape(s, isSelected) {
+    push();
+    translate(s.x + Math.abs(s.w) / 2, s.y + Math.abs(s.h) / 2);
+    if (s.flipH) scale(-1, 1);
+    if (s.flipV) scale(1, -1);
+    rotate(s.rotation || 0);
+    
+    // Enhanced color with opacity support
+    let fillAlpha = s.fillOpacity !== undefined ? s.fillOpacity : 255;
+    let fillCol = color(s.fill);
+    fillCol.setAlpha(fillAlpha);
+    
+    stroke(s.stroke);
+    strokeWeight(s.strokeWeight);
+    fill(fillCol);
+    
+    drawShapeGeometry(s);
+    
+    // Highlight selected shapes
+    if (isSelected) {
+      noFill();
+      stroke(0, 255, 255);
+      strokeWeight(2);
+      rectMode(CENTER);
+      rect(0, 0, Math.abs(s.w) + 10, Math.abs(s.h) + 10);
+    }
+    
+    pop();
+  }
+
+  function drawShapeGeometry(s) {
+    switch (s.tool) {
+      case 'rect':
+        rectMode(CENTER);
+        rect(0, 0, Math.abs(s.w), Math.abs(s.h)); // No rounded corners
+        break;
+      case 'ellipse':
+        ellipse(0, 0, Math.abs(s.w), Math.abs(s.h));
+        break;
+      case 'triangle':
+        triangle(-Math.abs(s.w)/2, Math.abs(s.h)/2, Math.abs(s.w)/2, Math.abs(s.h)/2, 0, -Math.abs(s.h)/2);
+        break;
     }
   }
 
