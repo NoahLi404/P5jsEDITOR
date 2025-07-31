@@ -381,11 +381,6 @@
         <button class="btn-small" id="undoBtn">Undo</button>
         <button class="btn-small" id="redoBtn">Redo</button>
       </div>
-      <div class="btn-group">
-        <button class="btn-small" id="alignLeftBtn">Align L</button>
-        <button class="btn-small" id="alignCenterBtn">Align C</button>
-        <button class="btn-small" id="alignRightBtn">Align R</button>
-      </div>
       <label>Grid Snap:</label>
       <input type="checkbox" id="snapToGrid" />
       <label>Grid Size:</label>
@@ -503,9 +498,6 @@
     // Advanced features
     document.getElementById('undoBtn').onclick = undo;
     document.getElementById('redoBtn').onclick = redo;
-    document.getElementById('alignLeftBtn').onclick = () => alignShapes('left');
-    document.getElementById('alignCenterBtn').onclick = () => alignShapes('center');
-    document.getElementById('alignRightBtn').onclick = () => alignShapes('right');
     
     document.getElementById('snapToGrid').addEventListener('change', e => {
       snapToGrid = e.target.checked;
@@ -834,6 +826,7 @@
     let endX = snapToGrid ? Math.round(mouseX / gridSize) * gridSize : mouseX;
     let endY = snapToGrid ? Math.round(mouseY / gridSize) * gridSize : mouseY;
     
+    // Enhanced preview with proper positioning
     previewShape = {
       tool: currentTool,
       x: Math.min(startX, endX),
@@ -1087,32 +1080,7 @@
     }
   }
 
-  // Alignment functions
-  function alignShapes(alignment) {
-    if (selectedShapeIndices.length < 2) return;
-    
-    let bounds = getSelectionBounds();
-    
-    selectedShapeIndices.forEach(index => {
-      let s = shapes[index];
-      switch (alignment) {
-        case 'left':
-          s.x = bounds.left;
-          break;
-        case 'center':
-          s.x = bounds.left + (bounds.width - Math.abs(s.w)) / 2;
-          break;
-        case 'right':
-          s.x = bounds.left + bounds.width - Math.abs(s.w);
-          break;
-      }
-    });
-    
-    updateSelectionBox();
-    updateCodeBox();
-    saveToHistory();
-    updateStatus(`Aligned ${selectedShapeIndices.length} shapes`);
-  }
+
 
   function updateTransformUI() {
     if (selectedShapeIndices.length === 0) {
@@ -1135,35 +1103,51 @@
     
     for (let s of shapes) {
       code += `  push();\n`;
+      
+      // Translate to shape center for proper rotation and scaling
       code += `  translate(${(s.x + Math.abs(s.w)/2).toFixed(1)}, ${(s.y + Math.abs(s.h)/2).toFixed(1)});\n`;
+      
+      // Apply transformations in correct order
+      if (s.rotation && s.rotation !== 0) {
+        code += `  rotate(${s.rotation.toFixed(3)});\n`;
+      }
       if (s.flipH) code += `  scale(-1, 1);\n`;
       if (s.flipV) code += `  scale(1, -1);\n`;
-      if (s.rotation) code += `  rotate(${s.rotation.toFixed(3)});\n`;
       
-      // Enhanced color handling with opacity
-      let fillAlpha = s.fillOpacity !== undefined ? s.fillOpacity : 255;
-      let fillCol = color(s.fill);
-      fillCol.setAlpha(fillAlpha);
-      
+      // Set drawing properties
       code += `  stroke("${s.stroke}");\n`;
       code += `  strokeWeight(${s.strokeWeight});\n`;
-      code += `  fill("${s.fill}");\n`;
       
+      // Handle fill with opacity
+      if (s.fillOpacity !== undefined && s.fillOpacity < 255) {
+        // Convert hex color to RGB and add alpha
+        let r = parseInt(s.fill.substr(1,2), 16);
+        let g = parseInt(s.fill.substr(3,2), 16);
+        let b = parseInt(s.fill.substr(5,2), 16);
+        code += `  fill(${r}, ${g}, ${b}, ${s.fillOpacity});\n`;
+      } else {
+        code += `  fill("${s.fill}");\n`;
+      }
+      
+      // Draw shape with correct mode and coordinates
       switch (s.tool) {
         case 'rect':
-          code += `  rectMode(CENTER);\n  rect(0, 0, ${Math.abs(s.w)}, ${Math.abs(s.h)});\n`;
+          code += `  rectMode(CENTER);\n`;
+          code += `  rect(0, 0, ${Math.abs(s.w)}, ${Math.abs(s.h)});\n`;
           break;
         case 'ellipse':
           code += `  ellipse(0, 0, ${Math.abs(s.w)}, ${Math.abs(s.h)});\n`;
           break;
         case 'triangle':
-          code += `  triangle(-${Math.abs(s.w)/2}, ${Math.abs(s.h)/2}, ${Math.abs(s.w)/2}, ${Math.abs(s.h)/2}, 0, -${Math.abs(s.h)/2});\n`;
+          let hw = Math.abs(s.w) / 2;
+          let hh = Math.abs(s.h) / 2;
+          code += `  triangle(-${hw}, ${hh}, ${hw}, ${hh}, 0, -${hh});\n`;
           break;
       }
       code += `  pop();\n`;
     }
     
-    code += '}';
+    code += `}\n\n// Copy this code to your p5.js editor and run it!`;
     document.getElementById('codeBox').textContent = code;
   }
 
@@ -1202,13 +1186,31 @@
       drawShape(shapes[i], selectedShapeIndices.includes(i));
     }
     
-    // Draw preview shape while drawing
+    // Draw enhanced preview shape while drawing
     if (previewShape && isDrawing) {
       push();
-      stroke(255, 255, 255, 150); // Semi-transparent preview
-      fill(red(previewShape.fill), green(previewShape.fill), blue(previewShape.fill), 100);
-      strokeWeight(previewShape.strokeWeight);
+      
+      // Position preview at exact location where it will be created
+      translate(previewShape.x + Math.abs(previewShape.w) / 2, previewShape.y + Math.abs(previewShape.h) / 2);
+      
+      // Semi-transparent preview styling
+      stroke(255, 255, 255, 180);
+      strokeWeight(previewShape.strokeWeight + 1); // Slightly thicker for visibility
+      
+      // Semi-transparent fill with original color
+      let previewFill = color(previewShape.fill);
+      previewFill.setAlpha(80); // More transparent
+      fill(previewFill);
+      
+      // Draw preview shape geometry
       drawShapeGeometry(previewShape);
+      
+      // Add dashed border effect for better preview visibility
+      noFill();
+      stroke(0, 255, 255, 200); // Cyan dashed outline
+      strokeWeight(1);
+      drawDot(0, 0, 4); // Center dot
+      
       pop();
     }
   }
@@ -1268,6 +1270,10 @@
     for (let y = 0; y < height; y += gridSize) {
       line(0, y, width, y);
     }
+  }
+
+  function drawDot(x, y, size) {
+    ellipse(x, y, size, size);
   }
 
   function windowResized() {
