@@ -1103,43 +1103,31 @@
   function flipHorizontal() {
     if (selectedShapeIndices.length === 0) return;
     
-    // Get the bounding box of all selected shapes
-    let bounds = getSelectionBounds();
-    let centerX = bounds.left + bounds.width / 2;
-    
     selectedShapeIndices.forEach(index => {
       let s = shapes[index];
-      // Flip the shape around the group center
-      let shapeCenter = s.x + Math.abs(s.w) / 2;
-      let distFromCenter = shapeCenter - centerX;
-      s.x = centerX - distFromCenter - Math.abs(s.w);
+      // Simply toggle the flip state - the rendering handles the visual flip
       s.flipH = !s.flipH;
     });
     
     updateSelectionBox();
     updateCodeBox();
     saveToHistory();
+    updateStatus('Flipped horizontally');
   }
 
   function flipVertical() {
     if (selectedShapeIndices.length === 0) return;
     
-    // Get the bounding box of all selected shapes
-    let bounds = getSelectionBounds();
-    let centerY = bounds.top + bounds.height / 2;
-    
     selectedShapeIndices.forEach(index => {
       let s = shapes[index];
-      // Flip the shape around the group center
-      let shapeCenter = s.y + Math.abs(s.h) / 2;
-      let distFromCenter = shapeCenter - centerY;
-      s.y = centerY - distFromCenter - Math.abs(s.h);
+      // Simply toggle the flip state - the rendering handles the visual flip
       s.flipV = !s.flipV;
     });
     
     updateSelectionBox();
     updateCodeBox();
     saveToHistory();
+    updateStatus('Flipped vertically');
   }
 
   function copyShape() {
@@ -1358,9 +1346,11 @@
   function drawShape(s, isSelected) {
     push();
     translate(s.x + Math.abs(s.w) / 2, s.y + Math.abs(s.h) / 2);
+    
+    // Apply transformations in correct order
+    if (s.rotation && s.rotation !== 0) rotate(s.rotation);
     if (s.flipH) scale(-1, 1);
     if (s.flipV) scale(1, -1);
-    rotate(s.rotation || 0);
     
     // Enhanced color with opacity support
     let fillAlpha = s.fillOpacity !== undefined ? s.fillOpacity : 255;
