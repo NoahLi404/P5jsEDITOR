@@ -650,6 +650,23 @@
 
     // Enhanced selection box interactions
     setupSelectionHandles();
+    
+    // Add right-click event listener to canvas
+    setupCanvasEventListeners();
+  }
+
+  function setupCanvasEventListeners() {
+    // Add right-click support and prevent context menu
+    document.addEventListener('contextmenu', e => {
+      e.preventDefault(); // Prevent context menu
+    });
+    
+    // Override p5.js mousePressed to pass event
+    document.addEventListener('mousedown', e => {
+      if (e.target.tagName === 'CANVAS') {
+        mousePressed(e);
+      }
+    });
   }
 
   function setupSelectionHandles() {
@@ -727,8 +744,14 @@
     setTimeout(() => statusIndicator.classList.remove('pulse'), 1000);
   }
 
-  function mousePressed() {
+  function mousePressed(event) {
     if (mouseX < 0 || mouseY < 0 || mouseX > width || mouseY > height) return;
+
+    // Handle right-click for selection (works in any tool)
+    if (event && event.button === 2) {
+      handleRightClickSelection();
+      return;
+    }
 
     // Check if clicking on handles first
     if (currentTool === 'select' && selectedShapeIndices.length > 0) {
@@ -741,6 +764,31 @@
       handleSelection();
     } else {
       startDrawing();
+    }
+  }
+
+  function handleRightClickSelection() {
+    // Find the topmost shape that was right-clicked
+    let clickedShapeIndex = -1;
+    for (let i = shapes.length - 1; i >= 0; i--) {
+      if (isPointInShape(mouseX, mouseY, shapes[i])) {
+        clickedShapeIndex = i;
+        break;
+      }
+    }
+
+    if (clickedShapeIndex !== -1) {
+      // Select the right-clicked shape regardless of current tool
+      selectedShapeIndices = [clickedShapeIndex];
+      updateTransformUI();
+      updateSelectionBox();
+      updateStatus(`Right-clicked: Selected shape ${clickedShapeIndex + 1}`);
+    } else {
+      // Right-clicked on empty space - deselect
+      selectedShapeIndices = [];
+      updateTransformUI();
+      selectionBox.style.display = 'none';
+      updateStatus('Right-clicked: No shapes selected');
     }
   }
 
@@ -763,21 +811,22 @@
   }
 
   function handleSelection() {
-    // Check for touching/overlapping shapes and group them
-    let clickedShapes = [];
+    // Find the topmost shape that was clicked (single selection only)
+    let clickedShapeIndex = -1;
     for (let i = shapes.length - 1; i >= 0; i--) {
       if (isPointInShape(mouseX, mouseY, shapes[i])) {
-        clickedShapes.push(i);
+        clickedShapeIndex = i;
+        break; // Only select the topmost shape
       }
     }
 
-    if (clickedShapes.length > 0) {
-      // Get all touching shapes starting from the clicked shape
-      selectedShapeIndices = getTouchingGroup(clickedShapes[0]);
+    if (clickedShapeIndex !== -1) {
+      // Select only the specific clicked shape
+      selectedShapeIndices = [clickedShapeIndex];
       setupDragging();
       updateTransformUI();
       updateSelectionBox();
-      updateStatus(`Selected ${selectedShapeIndices.length} shape(s)`);
+      updateStatus(`Selected shape ${clickedShapeIndex + 1}`);
     } else {
       // Clicked on empty space - deselect
       selectedShapeIndices = [];
@@ -788,37 +837,9 @@
     }
   }
 
-  function getTouchingGroup(shapeIndex) {
-    let group = [shapeIndex];
-    let toCheck = [shapeIndex];
-    let checked = new Set([shapeIndex]);
-    
-    // Find all shapes that touch any shape in the group
-    while (toCheck.length > 0) {
-      let currentIndex = toCheck.pop();
-      let currentShape = shapes[currentIndex];
-      
-      for (let i = 0; i < shapes.length; i++) {
-        if (!checked.has(i) && shapesTouch(currentShape, shapes[i])) {
-          group.push(i);
-          toCheck.push(i);
-          checked.add(i);
-        }
-      }
-    }
-    
-    return group;
-  }
 
-  function shapesTouch(shape1, shape2) {
-    let s1 = getBounds(shape1);
-    let s2 = getBounds(shape2);
-    
-    // Check if shapes overlap or touch (including edges) with small tolerance
-    let tolerance = 2; // 2 pixel tolerance for touching
-    return !(s1.right < s2.left - tolerance || s2.right < s1.left - tolerance || 
-             s1.bottom < s2.top - tolerance || s2.bottom < s1.top - tolerance);
-  }
+
+
 
   function getBounds(shape) {
     // Get actual bounds considering rotation and flips
@@ -1441,6 +1462,8 @@
   // Keyboard shortcuts
   function keyPressed() {
     if (keyCode === 8 || keyCode === 46) { // Backspace or Delete
+      deleteSelected();
+    } else if (key === 'x' && (keyIsPressed && key === 'Control')) { // Ctrl+X
       deleteSelected();
     } else if (key === 'c' && (keyIsPressed && key === 'Control')) {
       copyShape();
