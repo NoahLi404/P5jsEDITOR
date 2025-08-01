@@ -814,17 +814,39 @@
     let s1 = getBounds(shape1);
     let s2 = getBounds(shape2);
     
-    // Check if shapes overlap or touch (including edges)
-    return !(s1.right < s2.left || s2.right < s1.left || 
-             s1.bottom < s2.top || s2.bottom < s1.top);
+    // Check if shapes overlap or touch (including edges) with small tolerance
+    let tolerance = 2; // 2 pixel tolerance for touching
+    return !(s1.right < s2.left - tolerance || s2.right < s1.left - tolerance || 
+             s1.bottom < s2.top - tolerance || s2.bottom < s1.top - tolerance);
   }
 
   function getBounds(shape) {
+    // Get actual bounds considering rotation and flips
+    let w = Math.abs(shape.w);
+    let h = Math.abs(shape.h);
+    let centerX = shape.x + w / 2;
+    let centerY = shape.y + h / 2;
+    
+    if (shape.rotation && shape.rotation !== 0) {
+      // For rotated shapes, calculate rotated bounding box
+      let cos = Math.abs(Math.cos(shape.rotation));
+      let sin = Math.abs(Math.sin(shape.rotation));
+      let rotatedW = w * cos + h * sin;
+      let rotatedH = w * sin + h * cos;
+      
+      return {
+        left: centerX - rotatedW / 2,
+        right: centerX + rotatedW / 2,
+        top: centerY - rotatedH / 2,
+        bottom: centerY + rotatedH / 2
+      };
+    }
+    
     return {
       left: shape.x,
-      right: shape.x + Math.abs(shape.w),
+      right: shape.x + w,
       top: shape.y,
-      bottom: shape.y + Math.abs(shape.h)
+      bottom: shape.y + h
     };
   }
 
@@ -1101,33 +1123,37 @@
   }
 
   function flipHorizontal() {
-    if (selectedShapeIndices.length === 0) return;
+    if (selectedShapeIndices.length === 0) {
+      updateStatus('No shapes selected for flip');
+      return;
+    }
     
     selectedShapeIndices.forEach(index => {
       let s = shapes[index];
-      // Simply toggle the flip state - the rendering handles the visual flip
       s.flipH = !s.flipH;
     });
     
     updateSelectionBox();
     updateCodeBox();
     saveToHistory();
-    updateStatus('Flipped horizontally');
+    updateStatus(`Flipped ${selectedShapeIndices.length} shape(s) horizontally`);
   }
 
   function flipVertical() {
-    if (selectedShapeIndices.length === 0) return;
+    if (selectedShapeIndices.length === 0) {
+      updateStatus('No shapes selected for flip');
+      return;
+    }
     
     selectedShapeIndices.forEach(index => {
       let s = shapes[index];
-      // Simply toggle the flip state - the rendering handles the visual flip
       s.flipV = !s.flipV;
     });
     
     updateSelectionBox();
     updateCodeBox();
     saveToHistory();
-    updateStatus('Flipped vertically');
+    updateStatus(`Flipped ${selectedShapeIndices.length} shape(s) vertically`);
   }
 
   function copyShape() {
