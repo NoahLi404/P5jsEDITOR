@@ -174,35 +174,44 @@
       font-family: 'Fira Code', Consolas, Monaco, 'Courier New', monospace;
     }
   </style>
+  <link rel="stylesheet" href="github.min.css">
 </head>
 <body>
 
   <h2>Smooth Markdown Reader with Copyable Code</h2>
+  <div style="margin-bottom: 16px; display: flex; gap: 10px;">
+    <button id="import-btn">Import</button>
+    <button id="export-btn">Export</button>
+    <input type="file" id="import-file" accept=".md,.txt" style="display:none;" />
+  </div>
   <textarea id="md-input" placeholder="Write your markdown here..."></textarea>
 
   <div id="preview"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="marked.min.js"></script>
+  <script src="highlight.min.js"></script>
   <script>
     const input = document.getElementById('md-input');
     const preview = document.getElementById('preview');
+    const importBtn = document.getElementById('import-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const importFile = document.getElementById('import-file');
 
-    // Sanitize HTML to avoid XSS (optional but recommended)
-    // For this example, we keep it simple, but in production use a sanitizer like DOMPurify
+    // Syntax highlighting for code blocks
+    function highlightCodeBlocks() {
+      preview.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+      });
+    }
 
     function addCopyButtons() {
-      // Remove old buttons first (if any)
       preview.querySelectorAll('.copy-btn').forEach(btn => btn.remove());
-
       preview.querySelectorAll('pre').forEach(pre => {
-        // create copy button
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
         btn.textContent = 'Copy';
-
         btn.addEventListener('click', async () => {
           try {
-            // Copy the text content inside code tag in pre
             const code = pre.querySelector('code').innerText;
             await navigator.clipboard.writeText(code);
             btn.textContent = 'Copied!';
@@ -212,23 +221,50 @@
             setTimeout(() => (btn.textContent = 'Copy'), 1500);
           }
         });
-
-        pre.style.position = 'relative'; // ensure relative for button position
+        pre.style.position = 'relative';
         pre.appendChild(btn);
       });
     }
 
     function updatePreview() {
-      // Use marked to parse the markdown text into HTML
       preview.innerHTML = marked.parse(input.value);
-
+      highlightCodeBlocks();
       addCopyButtons();
     }
 
     input.addEventListener('input', updatePreview);
-
-
     updatePreview();
+
+    // Export markdown
+    exportBtn.addEventListener('click', () => {
+      const blob = new Blob([input.value], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'markdown.md';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 0);
+    });
+
+    // Import markdown
+    importBtn.addEventListener('click', () => {
+      importFile.click();
+    });
+    importFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        input.value = evt.target.result;
+        updatePreview();
+      };
+      reader.readAsText(file);
+      importFile.value = '';
+    });
   </script>
 </body>
 </html>
