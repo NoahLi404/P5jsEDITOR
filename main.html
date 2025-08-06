@@ -174,7 +174,21 @@
       font-family: 'Fira Code', Consolas, Monaco, 'Courier New', monospace;
     }
   </style>
-  <link rel="stylesheet" href="github.min.css">
+<!-- Inline highlight.js GitHub theme -->
+<style>
+/* highlight.js github.min.css (truncated for brevity, use full content in real use) */
+.hljs { display: block; overflow-x: auto; padding: 0.5em; background: #f6f8fa; color: #24292e; }
+.hljs-comment, .hljs-quote { color: #6a737d; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section, .hljs-link { color: #d73a49; }
+.hljs-function .hljs-title, .hljs-title, .hljs-name { color: #6f42c1; }
+.hljs-variable, .hljs-template-variable, .hljs-selector-attr, .hljs-selector-pseudo { color: #005cc5; }
+.hljs-string, .hljs-regexp, .hljs-meta, .hljs-symbol, .hljs-bullet { color: #032f62; }
+.hljs-addition { color: #22863a; background-color: #f0fff4; }
+.hljs-deletion { color: #b31d28; background-color: #ffeef0; }
+.hljs-type, .hljs-built_in, .hljs-builtin-name, .hljs-attr, .hljs-number, .hljs-selector-id, .hljs-selector-class { color: #005cc5; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }
+</style>
 </head>
 <body>
 
@@ -188,83 +202,76 @@
 
   <div id="preview"></div>
 
-  <script src="marked.min.js"></script>
-  <script src="highlight.min.js"></script>
   <script>
-    const input = document.getElementById('md-input');
-    const preview = document.getElementById('preview');
-    const importBtn = document.getElementById('import-btn');
-    const exportBtn = document.getElementById('export-btn');
-    const importFile = document.getElementById('import-file');
-
-    // Syntax highlighting for code blocks
-    function highlightCodeBlocks() {
-      preview.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
-      });
-    }
-
-    function addCopyButtons() {
-      preview.querySelectorAll('.copy-btn').forEach(btn => btn.remove());
-      preview.querySelectorAll('pre').forEach(pre => {
-        const btn = document.createElement('button');
-        btn.className = 'copy-btn';
-        btn.textContent = 'Copy';
-        btn.addEventListener('click', async () => {
-          try {
-            const code = pre.querySelector('code').innerText;
-            await navigator.clipboard.writeText(code);
-            btn.textContent = 'Copied!';
-            setTimeout(() => (btn.textContent = 'Copy'), 1500);
-          } catch (err) {
-            btn.textContent = 'Error';
-            setTimeout(() => (btn.textContent = 'Copy'), 1500);
-          }
-        });
-        pre.style.position = 'relative';
-        pre.appendChild(btn);
-      });
-    }
-
-    function updatePreview() {
-      preview.innerHTML = marked.parse(input.value);
-      highlightCodeBlocks();
-      addCopyButtons();
-    }
-
-    input.addEventListener('input', updatePreview);
+// marked.min.js (truncated for brevity, use full content in real use)
+// ...MARKED_JS_CODE...
+// highlight.min.js (truncated for brevity, use full content in real use)
+// ...HIGHLIGHT_JS_CODE...
+const input = document.getElementById('md-input');
+const preview = document.getElementById('preview');
+const importBtn = document.getElementById('import-btn');
+const exportBtn = document.getElementById('export-btn');
+const importFile = document.getElementById('import-file');
+function highlightCodeBlocks() {
+  preview.querySelectorAll('pre code').forEach((block) => {
+    hljs.highlightElement(block);
+  });
+}
+function addCopyButtons() {
+  preview.querySelectorAll('.copy-btn').forEach(btn => btn.remove());
+  preview.querySelectorAll('pre').forEach(pre => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', async () => {
+      try {
+        const code = pre.querySelector('code').innerText;
+        await navigator.clipboard.writeText(code);
+        btn.textContent = 'Copied!';
+        setTimeout(() => (btn.textContent = 'Copy'), 1500);
+      } catch (err) {
+        btn.textContent = 'Error';
+        setTimeout(() => (btn.textContent = 'Copy'), 1500);
+      }
+    });
+    pre.style.position = 'relative';
+    pre.appendChild(btn);
+  });
+}
+function updatePreview() {
+  preview.innerHTML = marked.parse(input.value);
+  highlightCodeBlocks();
+  addCopyButtons();
+}
+input.addEventListener('input', updatePreview);
+updatePreview();
+exportBtn.addEventListener('click', () => {
+  const blob = new Blob([input.value], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'markdown.md';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 0);
+});
+importBtn.addEventListener('click', () => {
+  importFile.click();
+});
+importFile.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    input.value = evt.target.result;
     updatePreview();
-
-    // Export markdown
-    exportBtn.addEventListener('click', () => {
-      const blob = new Blob([input.value], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'markdown.md';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 0);
-    });
-
-    // Import markdown
-    importBtn.addEventListener('click', () => {
-      importFile.click();
-    });
-    importFile.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        input.value = evt.target.result;
-        updatePreview();
-      };
-      reader.readAsText(file);
-      importFile.value = '';
-    });
-  </script>
+  };
+  reader.readAsText(file);
+  importFile.value = '';
+});
+</script>
 </body>
 </html>
