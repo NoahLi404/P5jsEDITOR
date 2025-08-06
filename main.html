@@ -137,6 +137,26 @@
     .theme-toggle:hover {
       color: #4338ca;
     }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #4f46e5;
+      border: none;
+      color: white;
+      padding: 5px 10px;
+      font-size: 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.3s, background-color 0.3s;
+      user-select: none;
+      font-weight: 600;
+    }
+    .copy-btn:hover {
+      opacity: 1;
+      background-color: #4338ca;
+    }
     @media (max-width: 600px) {
       .container, .header, .toolbar, .tabs, .editor-area, .preview-area {
         padding-left: 8px !important;
@@ -155,4 +175,227 @@
     <div class="toolbar" aria-label="Markdown formatting toolbar">
       <button type="button" data-format="bold" title="Bold (Ctrl+B)"><b>B</b></button>
       <button type="button" data-format="italic" title="Italic (Ctrl+I)"><i>I</i></button>
-      <button type="button" data-format="code" title="Inline Code (Ctrl+E)">{
+      <button type="button" data-format="code" title="Inline Code (Ctrl+E)">`code`</button>
+      <button type="button" data-format="link" title="Link (Ctrl+K)">🔗</button>
+      <button type="button" data-format="ul" title="Bulleted List">• List</button>
+      <button type="button" data-format="ol" title="Numbered List">1. List</button>
+      <button type="button" data-format="quote" title="Blockquote">❝</button>
+      <button type="button" data-format="hr" title="Horizontal Rule">―</button>
+      <button type="button" data-format="image" title="Image">🖼️</button>
+      <label title="Import Markdown">
+        📂 <input type="file" id="import-md" accept=".md,.txt" style="display:none">
+      </label>
+      <button type="button" id="export-md" title="Export as .md">⬇️ MD</button>
+      <button type="button" id="export-html" title="Export as .html">⬇️ HTML</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" id="tab-edit" type="button">Edit</button>
+      <button class="tab" id="tab-preview" type="button">Preview</button>
+    </div>
+    <div class="editor-area active" id="editor-area">
+      <textarea id="md-input" placeholder="Write your markdown here..."></textarea>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="preview-area" id="preview-area">
+      <div id="preview"></div>
+      <div class="stats" id="stats-preview"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script>
+    // --- Tab switching ---
+    const tabEdit = document.getElementById('tab-edit');
+    const tabPreview = document.getElementById('tab-preview');
+    const editorArea = document.getElementById('editor-area');
+    const previewArea = document.getElementById('preview-area');
+    const input = document.getElementById('md-input');
+    const preview = document.getElementById('preview');
+    const stats = document.getElementById('stats');
+    const statsPreview = document.getElementById('stats-preview');
+    const toolbar = document.querySelector('.toolbar');
+    const themeToggle = document.getElementById('theme-toggle');
+    const importMd = document.getElementById('import-md');
+    const exportMd = document.getElementById('export-md');
+    const exportHtml = document.getElementById('export-html');
+
+    function switchTab(tab) {
+      if (tab === 'edit') {
+        tabEdit.classList.add('active');
+        tabPreview.classList.remove('active');
+        editorArea.classList.add('active');
+        previewArea.classList.remove('active');
+        input.focus();
+      } else {
+        tabEdit.classList.remove('active');
+        tabPreview.classList.add('active');
+        editorArea.classList.remove('active');
+        previewArea.classList.add('active');
+      }
+    }
+    tabEdit.onclick = () => switchTab('edit');
+    tabPreview.onclick = () => switchTab('preview');
+
+    // --- Toolbar formatting ---
+    function surroundSelection(before, after, placeholder) {
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      const value = input.value;
+      let selected = value.slice(start, end) || placeholder;
+      const newValue = value.slice(0, start) + before + selected + after + value.slice(end);
+      input.value = newValue;
+      input.focus();
+      input.setSelectionRange(start + before.length, start + before.length + selected.length);
+      updatePreview();
+    }
+    toolbar.addEventListener('click', e => {
+      if (e.target.closest('button[data-format]')) {
+        const btn = e.target.closest('button[data-format]');
+        const fmt = btn.getAttribute('data-format');
+        switch (fmt) {
+          case 'bold': surroundSelection('**', '**', 'bold'); break;
+          case 'italic': surroundSelection('*', '*', 'italic'); break;
+          case 'code': surroundSelection('`', '`', 'code'); break;
+          case 'link': surroundSelection('[', '](url)', 'text'); break;
+          case 'ul': surroundSelection('\n- ', '', 'item'); break;
+          case 'ol': surroundSelection('\n1. ', '', 'item'); break;
+          case 'quote': surroundSelection('\n> ', '', 'quote'); break;
+          case 'hr': surroundSelection('\n---\n', '', ''); break;
+          case 'image': surroundSelection('![', '](url)', 'alt'); break;
+        }
+      }
+    });
+
+    // --- Import/Export ---
+    toolbar.querySelector('label[title="Import Markdown"]').onclick = () => importMd.click();
+    importMd.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        input.value = ev.target.result;
+        updatePreview();
+        switchTab('edit');
+      };
+      reader.readAsText(file);
+    };
+    exportMd.onclick = () => {
+      const blob = new Blob([input.value], {type: 'text/markdown'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'markdown.md';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    };
+    exportHtml.onclick = () => {
+      const html = `<!DOCTYPE html><html><body>${preview.innerHTML}</body></html>`;
+      const blob = new Blob([html], {type: 'text/html'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'preview.html';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    };
+
+    // --- Theme toggle ---
+    function setTheme(dark) {
+      if (dark) {
+        document.documentElement.style.setProperty('--bg', '#181a1b');
+        document.documentElement.style.setProperty('--fg', '#f3f4f6');
+        themeToggle.textContent = '☀️';
+        localStorage.setItem('md-theme', 'dark');
+      } else {
+        document.documentElement.style.setProperty('--bg', '#f9fafb');
+        document.documentElement.style.setProperty('--fg', '#24292e');
+        themeToggle.textContent = '🌙';
+        localStorage.setItem('md-theme', 'light');
+      }
+    }
+    themeToggle.onclick = () => {
+      setTheme(themeToggle.textContent === '🌙');
+    };
+    // On load
+    setTheme(localStorage.getItem('md-theme') === 'dark');
+
+    // --- Live stats ---
+    function updateStats() {
+      const text = input.value;
+      const words = (text.match(/\b\w+\b/g) || []).length;
+      const chars = text.length;
+      stats.textContent = `${words} words, ${chars} chars`;
+      statsPreview.textContent = stats.textContent;
+    }
+
+    // --- Syntax highlighting and preview ---
+    function addCopyButtons() {
+      preview.querySelectorAll('.copy-btn').forEach(btn => btn.remove());
+      preview.querySelectorAll('pre').forEach(pre => {
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'Copy';
+        btn.style.position = 'absolute';
+        btn.style.top = '8px';
+        btn.style.right = '8px';
+        btn.addEventListener('click', async () => {
+          try {
+            const code = pre.querySelector('code').innerText;
+            await navigator.clipboard.writeText(code);
+            btn.textContent = 'Copied!';
+            setTimeout(() => (btn.textContent = 'Copy'), 1500);
+          } catch (err) {
+            btn.textContent = 'Error';
+            setTimeout(() => (btn.textContent = 'Copy'), 1500);
+          }
+        });
+        pre.style.position = 'relative';
+        pre.appendChild(btn);
+      });
+    }
+    function highlightAll() {
+      preview.querySelectorAll('pre code').forEach(block => {
+        hljs.highlightElement(block);
+      });
+    }
+    function updatePreview() {
+      preview.innerHTML = marked.parse(input.value);
+      highlightAll();
+      addCopyButtons();
+      updateStats();
+    }
+    input.addEventListener('input', updatePreview);
+    // Keyboard shortcuts for formatting
+    input.addEventListener('keydown', e => {
+      if (e.ctrlKey) {
+        switch (e.key.toLowerCase()) {
+          case 'b': e.preventDefault(); surroundSelection('**', '**', 'bold'); break;
+          case 'i': e.preventDefault(); surroundSelection('*', '*', 'italic'); break;
+          case 'e': e.preventDefault(); surroundSelection('`', '`', 'code'); break;
+          case 'k': e.preventDefault(); surroundSelection('[', '](url)', 'text'); break;
+        }
+      }
+    });
+    // Drag and drop import
+    input.addEventListener('dragover', e => { e.preventDefault(); input.style.background = '#e0e7ff'; });
+    input.addEventListener('dragleave', e => { input.style.background = ''; });
+    input.addEventListener('drop', e => {
+      e.preventDefault();
+      input.style.background = '';
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          input.value = ev.target.result;
+          updatePreview();
+        };
+        reader.readAsText(file);
+      }
+    });
+    // Initial render
+    updatePreview();
+  </script>
+</body>
+</html>
