@@ -1,234 +1,158 @@
 <!DOCTYPE html>
-<html lang="en" >
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Smooth Markdown Reader with Copyable Code</title>
+  <title>Super Smooth Markdown Editor/Previewer</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <style>
-    /* General smooth font + background */
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #f9fafb;
-      margin: 0; padding: 20px;
-      display: flex; flex-direction: column; align-items: center;
+      background: var(--bg, #f9fafb);
+      margin: 0; padding: 0;
       min-height: 100vh;
-      box-sizing: border-box;
-      color: #24292e;
-      transition: background-color 0.3s ease, color 0.3s ease;
+      color: var(--fg, #24292e);
+      transition: background 0.3s, color 0.3s;
     }
-
-    h2 {
-      margin-bottom: 20px;
+    .container {
+      max-width: 800px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      padding: 0 0 32px 0;
+      overflow: hidden;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 32px 0 32px;
+    }
+    .header h2 {
+      margin: 0;
+      font-size: 2rem;
       font-weight: 700;
       letter-spacing: 0.04em;
     }
-
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 16px 32px 0 32px;
+      flex-wrap: wrap;
+    }
+    .toolbar button, .toolbar label {
+      background: #f3f4f6;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      color: #4f46e5;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .toolbar button:hover, .toolbar label:hover {
+      background: #e0e7ff;
+      color: #4338ca;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid #e5e7eb;
+      margin: 24px 32px 0 32px;
+    }
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 12px 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      transition: border-color 0.2s, color 0.2s;
+      color: #6b7280;
+    }
+    .tab.active {
+      border-bottom: 2.5px solid #4f46e5;
+      color: #4f46e5;
+      background: #f3f4f6;
+    }
+    .editor-area, .preview-area {
+      display: none;
+      padding: 24px 32px 0 32px;
+    }
+    .editor-area.active, .preview-area.active {
+      display: block;
+    }
     textarea {
-      width: 90%;
-      max-width: 700px;
-      height: 180px;
-      font-size: 16px;
-      padding: 12px;
+      width: 100%;
+      min-height: 260px;
+      font-size: 1.1rem;
+      padding: 14px;
       border-radius: 8px;
       border: 2px solid #ddd;
       resize: vertical;
-      margin-bottom: 20px;
       font-family: monospace;
-      background: #fff;
-      box-shadow: 0 1px 5px rgba(0,0,0,0.1);
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      background: #f9fafb;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.07);
+      transition: border-color 0.3s, box-shadow 0.3s;
     }
-
     textarea:focus {
       border-color: #4f46e5;
-      box-shadow: 0 0 8px rgba(79, 70, 229, 0.5);
+      box-shadow: 0 0 8px rgba(79, 70, 229, 0.2);
       outline: none;
     }
-
     #preview {
-      width: 90%;
-      max-width: 700px;
-      background: #fff;
-      padding: 25px 30px;
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-      min-height: 250px;
-      font-size: 18px;
+      background: #f9fafb;
+      border-radius: 8px;
+      min-height: 260px;
+      padding: 18px 20px;
+      font-size: 1.1rem;
       line-height: 1.7;
       color: #24292e;
-      overflow-wrap: break-word;
-      transition: box-shadow 0.3s ease;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.07);
+      overflow-x: auto;
+      transition: background 0.3s, color 0.3s;
     }
-
-    #preview p {
-      margin-bottom: 1em;
-      transition: color 0.3s ease;
+    .stats {
+      text-align: right;
+      font-size: 0.95rem;
+      color: #6b7280;
+      margin: 8px 32px 0 0;
     }
-
-    /* Blockquote simple and smooth */
-    blockquote {
-      margin: 1.5em 0;
-      padding-left: 20px;
-      border-left: 4px solid #4f46e5;
-      color: #4b5563;
-      font-style: italic;
-      background: #f3f4f6;
-      border-radius: 6px;
-      transition: background-color 0.3s ease, border-color 0.3s ease;
-    }
-
-    /* Smooth lists */
-    ul, ol {
-      margin-left: 1.6em;
-      margin-bottom: 1.2em;
-      padding-left: 0;
-      color: #333;
-      transition: color 0.3s ease;
-    }
-
-    ul li, ol li {
-      margin-bottom: 0.5em;
-    }
-
-    /* Headers smooth */
-    h1, h2, h3, h4, h5, h6 {
-      margin: 1em 0 0.5em 0;
-      font-weight: 700;
-      line-height: 1.2;
-      color: #1f2937;
-      transition: color 0.3s ease;
-    }
-
-    /* Links */
-    a {
+    .theme-toggle {
+      margin-left: 16px;
+      cursor: pointer;
+      font-size: 1.2rem;
+      background: none;
+      border: none;
       color: #4f46e5;
-      text-decoration: none;
-      transition: color 0.3s ease;
+      transition: color 0.2s;
     }
-    a:hover {
-      text-decoration: underline;
+    .theme-toggle:hover {
       color: #4338ca;
     }
-
-    /* Code blocks with ChatGPT style + copy button */
-
-    pre {
-      position: relative;
-      background: #1e1e1e;
-      color: #d4d4d4;
-      border-radius: 8px;
-      padding: 1em 1em 1em 1.2em;
-      font-family: 'Fira Code', Consolas, Monaco, 'Courier New', monospace;
-      font-size: 14px;
-      line-height: 1.4;
-      overflow-x: auto;
-      box-shadow: 0 10px 30px -10px rgba(0,0,0,0.7);
-      transition: box-shadow 0.3s ease;
-      margin: 1.5em 0;
-    }
-
-    pre:hover {
-      box-shadow: 0 12px 40px -8px rgba(79, 70, 229, 0.7);
-    }
-
-    code {
-      font-family: 'Fira Code', Consolas, Monaco, 'Courier New', monospace;
-      font-size: 14px;
-      color: #d4d4d4;
-      background: transparent;
-      padding: 0;
-      white-space: pre-wrap; /* wrap long lines */
-      word-break: break-word;
-    }
-
-    /* Copy button styling */
-    .copy-btn {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      background: #4f46e5;
-      border: none;
-      color: white;
-      padding: 5px 10px;
-      font-size: 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      opacity: 0.7;
-      transition: opacity 0.3s ease, background-color 0.3s ease;
-      user-select: none;
-      font-weight: 600;
-    }
-
-    .copy-btn:hover {
-      opacity: 1;
-      background-color: #4338ca;
-    }
-
-    /* Inline code styling */
-    p code, li code {
-      background: #eaeaea;
-      color: #c7254e;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 90%;
-      font-family: 'Fira Code', Consolas, Monaco, 'Courier New', monospace;
+    @media (max-width: 600px) {
+      .container, .header, .toolbar, .tabs, .editor-area, .preview-area {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+      }
+      .header h2 { font-size: 1.2rem; }
     }
   </style>
 </head>
 <body>
-
-  <h2>Smooth Markdown Reader with Copyable Code</h2>
-  <textarea id="md-input" placeholder="Write your markdown here..."></textarea>
-
-  <div id="preview"></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script>
-    const input = document.getElementById('md-input');
-    const preview = document.getElementById('preview');
-
-    // Sanitize HTML to avoid XSS (optional but recommended)
-    // For this example, we keep it simple, but in production use a sanitizer like DOMPurify
-
-    function addCopyButtons() {
-      // Remove old buttons first (if any)
-      preview.querySelectorAll('.copy-btn').forEach(btn => btn.remove());
-
-      preview.querySelectorAll('pre').forEach(pre => {
-        // create copy button
-        const btn = document.createElement('button');
-        btn.className = 'copy-btn';
-        btn.textContent = 'Copy';
-
-        btn.addEventListener('click', async () => {
-          try {
-            // Copy the text content inside code tag in pre
-            const code = pre.querySelector('code').innerText;
-            await navigator.clipboard.writeText(code);
-            btn.textContent = 'Copied!';
-            setTimeout(() => (btn.textContent = 'Copy'), 1500);
-          } catch (err) {
-            btn.textContent = 'Error';
-            setTimeout(() => (btn.textContent = 'Copy'), 1500);
-          }
-        });
-
-        pre.style.position = 'relative'; // ensure relative for button position
-        pre.appendChild(btn);
-      });
-    }
-
-    function updatePreview() {
-      // Use marked to parse the markdown text into HTML
-      preview.innerHTML = marked.parse(input.value);
-
-      addCopyButtons();
-    }
-
-    input.addEventListener('input', updatePreview);
-
-
-    updatePreview();
-  </script>
-</body>
-</html>
+  <div class="container">
+    <div class="header">
+      <h2>Super Smooth Markdown Editor</h2>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">🌙</button>
+    </div>
+    <div class="toolbar" aria-label="Markdown formatting toolbar">
+      <button type="button" data-format="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+      <button type="button" data-format="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+      <button type="button" data-format="code" title="Inline Code (Ctrl+E)">{
